@@ -8,13 +8,21 @@
 #include <time.h>
 
 #define BUFFER 255
-void log_process(pid_t child_id) {
+void log_process() {
     time_t t;
     time(&t);
     FILE * fp;
     fp = fopen("logs.txt", "a+");
-    fprintf(fp, "Child Process with ID: %d terminated at %s", child_id, ctime(&t));
+    fprintf(fp, "Child Process with ID:  terminated at %s", ctime(&t));
     fclose(fp);
+}
+
+void signal_handler(int signal) {
+    int status;
+    pid_t cpid;
+    while ((cpid = waitpid(-1, &status, WNOHANG)) > 0) {
+        continue;
+    }
 }
 char * get_space_separated_string(char * temp, int n, int delimeter_ascii) {
     char * space_separated_string = (char *) malloc(sizeof(char) * n);
@@ -25,13 +33,14 @@ char * get_space_separated_string(char * temp, int n, int delimeter_ascii) {
     }
     return space_separated_string;
 }
+
+
 /**
  * Parses the command done by the user into an array of char *
  * @param : the command written into the shell
  * @return : the array with all the tokens resulting from delimiting the command with " " delimeter 
  */
 char ** parse_command(char * command, int * size) {
-
     int n = 1;
     const char delimeter[2] = " ";
     // get the first token
@@ -45,9 +54,9 @@ char ** parse_command(char * command, int * size) {
         if (token[0] == 39 || token[0] == 34) { 
             int delimeter_ascii;
             if (token[0] == 39)
-                delimeter_ascii = 39; // ascii for single quotes
+                delimeter_ascii = 39; // ascii for single quotes (')
             else 
-                delimeter_ascii = 34; // ascii for double quotes
+                delimeter_ascii = 34; // ascii for double quotes (")
             char* temp = (char *) malloc(sizeof(char) * BUFFER);
             strcpy(temp, token);
             // loop until the second end of the quotes
@@ -98,7 +107,6 @@ void execute_child_process(char ** command_array, int size) {
     if (process_id >= 0) {
         if (process_id == 0) {
             int ret;
-            // printf("child: %d\n", getpid());
             ret = execvp(command_array[0], command_array);
             if (ret < 0) {
                 print_command_error_msg(command_array[0]);
@@ -107,14 +115,12 @@ void execute_child_process(char ** command_array, int size) {
         }
         else {
             if (!background_flag) {
-                // pid_t child;
-                wait(NULL);
-                // log_process(process_id);
-                // printf("child from parent: %d\n", child);
-                // printf("parent from parent: %d\n", getpid());
+                int status;
+                waitpid(process_id, &status, 0);
+                // printf("child: %d\n", cpid);
             }
             else {
-                //log_process(process_id);
+                signal(SIGCHLD, signal_handler);
             }
         }
     }
