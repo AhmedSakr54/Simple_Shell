@@ -9,11 +9,28 @@
 
 #define BUFFER 255
 
-void log_process(pid_t cpid) {
+char PATH_OF_LOGS_FILE[BUFFER];
+
+void log_parent_process(int start_process) {
     time_t t;
     time(&t);
     FILE * fp;
-    fp = fopen("logs.txt", "a+");
+    fp = fopen(PATH_OF_LOGS_FILE, "a+");
+    if (start_process)
+        fprintf(fp, "Parent Process with ID: %d started at %s\n", getpid(), ctime(&t));
+    else {
+        fprintf(fp, "\nParent Process with ID: %d ended at %s", getpid(), ctime(&t));
+        fprintf(fp, "===================================================================");
+    }
+    fclose(fp);
+}
+void log_process(pid_t cpid) {
+    if (cpid <= 0) 
+        return;
+    time_t t;
+    time(&t);
+    FILE * fp;
+    fp = fopen(PATH_OF_LOGS_FILE, "a+");
     fprintf(fp, "Child Process with ID: %d terminated at %s", cpid, ctime(&t));
     fclose(fp);
 }
@@ -21,28 +38,40 @@ void log_process(pid_t cpid) {
 void signal_handler(int signal) {
     int status;
     pid_t cpid;
-    while ((cpid = waitpid(-1, &status, WNOHANG)) > 0) {
+    cpid = waitpid(-1, &status, WNOHANG);
+    while (waitpid(-1, &status, WNOHANG) > 0) {
         continue;
     }
-    // sleep(1);
     log_process(cpid);
 }
 
-char * get_space_separated_string(char * temp, int n, int delimeter_ascii) {
-    char * space_separated_string = (char *) malloc(sizeof(char) * n);
-    int i = 1;
-    int k = 0;
-    while (temp[i] != delimeter_ascii) {
-        space_separated_string[k++] = temp[i++];
+/**
+ * Removes quotes from the arg string 'Lab 1' -> Lab 1 or """Lab 1""" -> Lab 1
+ * @param (char * quoted_string) : a string that is between quotes (single or double)
+ * @param (int size_of_quoted_string) : the size of the string including the quotes
+ * @param (int delimeter_ascii) : ascii for single or double quotes possible values are (39 or 34 respectivly)
+ * @return : a string with the quotes removed
+ **/
+char * remove_quotes_from_string(char * quoted_string, int size_of_quoted_string, int delimeter_ascii) {
+    char * non_quoted_string = (char *) malloc(sizeof(char) * size_of_quoted_string);
+
+    int start_of_acutal_text = 1;
+    while (quoted_string[start_of_acutal_text] == delimeter_ascii) {
+        start_of_acutal_text++;
     }
-    space_separated_string[k] = '\0';
-    return space_separated_string;
+    int k = 0;
+    while (quoted_string[start_of_acutal_text] != delimeter_ascii) {
+        non_quoted_string[k++] = quoted_string[start_of_acutal_text++];
+    }
+    non_quoted_string[k] = '\0';
+    return non_quoted_string;
 }
 
 
 /**
  * Parses the command done by the user into an array of char *
- * @param : the command written into the shell
+ * @param (char * command) : the command written into the shell
+ * @param (int * size) : a pointer to the size of the written command
  * @return : the array with all the tokens resulting from delimiting the command with " " delimeter 
  */
 char ** parse_command(char * command, int * size) {
@@ -54,28 +83,24 @@ char ** parse_command(char * command, int * size) {
     char ** parsed_command = (char **) malloc(sizeof(char*) * n);
     int i = 0;
     while(token != NULL) {
-        // check if there is single quotes or double quotes
-        // if true then directory or file name has a space in it
-        if (token[0] == 39 || token[0] == 34) { 
-            int delimeter_ascii;
-            if (token[0] == 39)
-                delimeter_ascii = 39; // ascii for single quotes (')
-            else 
-                delimeter_ascii = 34; // ascii for double quotes (")
+        // if true then directory or file name is between quotes
+        if (token[0] == 39 || token[0] == 34) { // 39 ascii for single quote (') and 34 ascii for double quote (")
+            int delimeter_ascii = token[0];
             char* temp = (char *) malloc(sizeof(char) * BUFFER);
             strcpy(temp, token);
-            // loop until the second end of the quotes
-            while (token[strlen(token)-1] != delimeter_ascii) {
-                // add the space back to the string 
-                strcat(temp, " ");
-                token = strtok(NULL, delimeter);
-                // concatenate the other parts of the string that is between the quotes
-                strcat(temp, token);
-            } // at the end of the loop temp will contain the quotes and the space separated file name
-
+            if (token[strlen(token)-1] != 39 || token[strlen(token)-1] != 34) {
+                // loop until the second end of the quotes
+                while (token[strlen(token)-1] != delimeter_ascii) {
+                    // add the space back to the string 
+                    strcat(temp, " ");
+                    token = strtok(NULL, delimeter);
+                    // concatenate the other parts of the string that is between the quotes
+                    strcat(temp, token);
+                } // at the end of the loop temp will contain the quotes and the space separated file name
+            }
             int temp_size = strlen(temp);
             // putting the space separated file or folder name into parsed_command without the quotes
-            parsed_command[i++] = get_space_separated_string(temp, temp_size, delimeter_ascii);
+            parsed_command[i++] = remove_quotes_from_string(temp, temp_size, delimeter_ascii);
             free(temp);
         }
         else { // normal command with no quotes
@@ -139,14 +164,19 @@ void execute_child_process(char ** command_array, int size) {
 int main() {
     char str[BUFFER] = "";
     int size = 0;
+    getcwd(PATH_OF_LOGS_FILE, BUFFER);
+    strcat(PATH_OF_LOGS_FILE, "/logs.txt");
+    log_parent_process(1);
     while (1) {
         printf("Shell > ");
         fgets(str, BUFFER, stdin); 
         if (strcmp(str, "\n") == 0) 
             continue;
         str[strlen(str)-1] = '\0';
-        if (strcmp(str, "exit") == 0)
+        if (strcmp(str, "exit") == 0) {
+            log_parent_process(0);
             exit(0);
+        }
         char ** command_array = parse_command(str, &size);
         if (strcmp(command_array[0], "cd") == 0) {
             if (chdir(command_array[1]) != 0) {
