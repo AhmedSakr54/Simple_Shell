@@ -8,12 +8,13 @@
 #include <time.h>
 
 #define BUFFER 255
-void log_process() {
+
+void log_process(pid_t cpid) {
     time_t t;
     time(&t);
     FILE * fp;
     fp = fopen("logs.txt", "a+");
-    fprintf(fp, "Child Process with ID:  terminated at %s", ctime(&t));
+    fprintf(fp, "Child Process with ID: %d terminated at %s", cpid, ctime(&t));
     fclose(fp);
 }
 
@@ -23,7 +24,10 @@ void signal_handler(int signal) {
     while ((cpid = waitpid(-1, &status, WNOHANG)) > 0) {
         continue;
     }
+    // sleep(1);
+    log_process(cpid);
 }
+
 char * get_space_separated_string(char * temp, int n, int delimeter_ascii) {
     char * space_separated_string = (char *) malloc(sizeof(char) * n);
     int i = 1;
@@ -31,6 +35,7 @@ char * get_space_separated_string(char * temp, int n, int delimeter_ascii) {
     while (temp[i] != delimeter_ascii) {
         space_separated_string[k++] = temp[i++];
     }
+    space_separated_string[k] = '\0';
     return space_separated_string;
 }
 
@@ -116,8 +121,10 @@ void execute_child_process(char ** command_array, int size) {
         else {
             if (!background_flag) {
                 int status;
-                waitpid(process_id, &status, 0);
-                // printf("child: %d\n", cpid);
+                pid_t cpid;
+                cpid = waitpid(process_id, &status, 0);
+                // sleep(1);
+                log_process(cpid);
             }
             else {
                 signal(SIGCHLD, signal_handler);
@@ -149,7 +156,6 @@ int main() {
         else {
             execute_child_process(command_array, size);
         }
-        
     }
     return 0;
 }
