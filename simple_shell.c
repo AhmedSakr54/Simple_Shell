@@ -11,16 +11,25 @@
 
 char PATH_OF_LOGS_FILE[BUFFER];
 
+
+void print_command_error_msg(char * erroneous_command) {
+    printf("%s: command not found\n", erroneous_command);
+}
+void print_dir_error_msg(char * erroneous_dir) {
+    printf("bash: cd: %s: No such file or directory\n", erroneous_dir);
+}
+
 void log_parent_process(int start_process) {
     time_t t;
     time(&t);
     FILE * fp;
     fp = fopen(PATH_OF_LOGS_FILE, "a+");
-    if (start_process)
+    if (start_process) {
+        fprintf(fp, "===================================================================\n");
         fprintf(fp, "Parent Process with ID: %d started at %s\n", getpid(), ctime(&t));
+    }
     else {
         fprintf(fp, "\nParent Process with ID: %d ended at %s", getpid(), ctime(&t));
-        fprintf(fp, "===================================================================");
     }
     fclose(fp);
 }
@@ -55,13 +64,13 @@ void signal_handler(int signal) {
 char * remove_quotes_from_string(char * quoted_string, int size_of_quoted_string, int delimeter_ascii) {
     char * non_quoted_string = (char *) malloc(sizeof(char) * size_of_quoted_string);
 
-    int start_of_acutal_text = 1;
-    while (quoted_string[start_of_acutal_text] == delimeter_ascii) {
-        start_of_acutal_text++;
+    int index_of_actual_text = 1;
+    while (quoted_string[index_of_actual_text] == delimeter_ascii) {
+        index_of_actual_text++;
     }
     int k = 0;
-    while (quoted_string[start_of_acutal_text] != delimeter_ascii) {
-        non_quoted_string[k++] = quoted_string[start_of_acutal_text++];
+    while (quoted_string[index_of_actual_text] != delimeter_ascii) {
+        non_quoted_string[k++] = quoted_string[index_of_actual_text++];
     }
     non_quoted_string[k] = '\0';
     return non_quoted_string;
@@ -88,7 +97,7 @@ char ** parse_command(char * command, int * size) {
             int delimeter_ascii = token[0];
             char* temp = (char *) malloc(sizeof(char) * BUFFER);
             strcpy(temp, token);
-            if (token[strlen(token)-1] != 39 || token[strlen(token)-1] != 34) {
+            if (token[strlen(token)-1] != delimeter_ascii) {
                 // loop until the second end of the quotes
                 while (token[strlen(token)-1] != delimeter_ascii) {
                     // add the space back to the string 
@@ -118,17 +127,9 @@ char ** parse_command(char * command, int * size) {
 }
 
 
-void print_command_error_msg(char * erroneous_command) {
-    printf("%s: command not found\n", erroneous_command);
-}
-void print_dir_error_msg(char * erroneous_dir) {
-    printf("bash: cd: %s: No such file or directory\n", erroneous_dir);
-}
-
 void execute_child_process(char ** command_array, int size) {
     pid_t process_id;
     int background_flag = 0;
-    //signal(SIGCHLD, log_process);
     process_id = fork();
     if (command_array[size-1] != NULL && strcmp(command_array[size-1],"&") == 0) {
         command_array[size-1] = NULL;
@@ -148,7 +149,6 @@ void execute_child_process(char ** command_array, int size) {
                 int status;
                 pid_t cpid;
                 cpid = waitpid(process_id, &status, 0);
-                // sleep(1);
                 log_process(cpid);
             }
             else {
@@ -169,7 +169,7 @@ int main() {
     log_parent_process(1);
     while (1) {
         printf("Shell > ");
-        fgets(str, BUFFER, stdin); 
+        fgets(str, BUFFER, stdin);
         if (strcmp(str, "\n") == 0) 
             continue;
         str[strlen(str)-1] = '\0';
