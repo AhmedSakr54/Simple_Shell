@@ -9,7 +9,7 @@
 
 #define BUFFER 255
 
-char PATH_OF_LOGS_FILE[BUFFER];
+char PATH_OF_LOGS_FILE[BUFFER]; // so that the logs.txt file will be in the same place no matter the current working directory
 
 
 void print_command_error_msg(char * erroneous_command) {
@@ -19,6 +19,10 @@ void print_dir_error_msg(char * erroneous_dir) {
     printf("bash: cd: %s: No such file or directory\n", erroneous_dir);
 }
 
+/**
+ * Logs the creation or termination of the parent process by writing the process ID with system time next to it
+ * @param (int start_process) : when 1 means log the start of the parent process when 0 log the termination of the process
+ **/ 
 void log_parent_process(int start_process) {
     time_t t;
     time(&t);
@@ -33,6 +37,11 @@ void log_parent_process(int start_process) {
     }
     fclose(fp);
 }
+
+/**
+ * Logs the termination of child process by writing the process ID with system time next to it
+ * @param (pid_t cpid) : the ID of the child process to be logged for termination
+ **/
 void log_process(pid_t cpid) {
     if (cpid <= 0) 
         return;
@@ -44,9 +53,13 @@ void log_process(pid_t cpid) {
     fclose(fp);
 }
 
+/**
+ * Executes after the background child process has terminated
+ **/ 
 void signal_handler(int signal) {
     int status;
     pid_t cpid;
+    // to get the process ID of the child
     cpid = waitpid(-1, &status, WNOHANG);
     while (waitpid(-1, &status, WNOHANG) > 0) {
         continue;
@@ -63,19 +76,21 @@ void signal_handler(int signal) {
  **/
 char * remove_quotes_from_string(char * quoted_string, int size_of_quoted_string, int delimeter_ascii) {
     char * non_quoted_string = (char *) malloc(sizeof(char) * size_of_quoted_string);
-
+    // if we are in this function then the start of the actual text cannot be from index 0 so I try from index 1
     int index_of_actual_text = 1;
+    // to handle cases where the user writes something like ''Lab 1'' 
+    // so index_of_actual_text=2 when getting out of the loop
     while (quoted_string[index_of_actual_text] == delimeter_ascii) {
         index_of_actual_text++;
     }
     int k = 0;
+    // filling non_quoted_string with the actual text with no quotes
     while (quoted_string[index_of_actual_text] != delimeter_ascii) {
         non_quoted_string[k++] = quoted_string[index_of_actual_text++];
     }
     non_quoted_string[k] = '\0';
     return non_quoted_string;
 }
-
 
 /**
  * Parses the command done by the user into an array of char *
@@ -126,66 +141,98 @@ char ** parse_command(char * command, int * size) {
     return parsed_command;
 }
 
-
+/**
+ * Creates a child process via the fork() function and executes it with the execvp() function
+ * @param (char ** command_array) : This parameter is to be an argument for the execvp() function
+ * @param (int size) : the size of the command array
+ **/
 void execute_child_process(char ** command_array, int size) {
     pid_t process_id;
+
+    // when 0 means foreground process
+    // when 1 means background process
     int background_flag = 0;
+    // creating the child process and getting it's ID
     process_id = fork();
+    // checking for the background operator & and setting backgorund_flag accordingly
     if (command_array[size-1] != NULL && strcmp(command_array[size-1],"&") == 0) {
+        // removing the & from the array to be able to put it into the execvp() function
+        // without problems
         command_array[size-1] = NULL;
         background_flag = 1;
     }
-    if (process_id >= 0) {
-        if (process_id == 0) {
+    if (process_id >= 0) { // no error occured in creating the child process
+        if (process_id == 0) { // executing the child process
             int ret;
             ret = execvp(command_array[0], command_array);
-            if (ret < 0) {
+            if (ret < 0) { // when true means there was an error in writing the initial command 
                 print_command_error_msg(command_array[0]);
             }
             exit(0);
         }
-        else {
-            if (!background_flag) {
+        else { // executing the parent process
+            if (!background_flag) { // foreground child process
                 int status;
                 pid_t cpid;
+                // parent process waiting for the child process to terminate
                 cpid = waitpid(process_id, &status, 0);
+                // parent process logging the termination of the child process
                 log_process(cpid);
             }
-            else {
+            else { // background child process
+                // the parent process is waiting for a signal that the child process has terminated to
+                // execute the signal_handler function
                 signal(SIGCHLD, signal_handler);
             }
         }
     }
-    else {
+    else { // an error occured in creating the child process
         printf("ERROR\n");
+    }
+}
+
+/**
+ * pareses then runs what the user inputed into str
+ * @param (char * str) : the user input from the terminal
+ **/
+void run_shell(char * str) {
+    // checking if the user has just pressed enter before typing anything
+    if (strcmp(str, "\n") == 0) 
+        return;
+    int size = 0;
+    // using the fgets method in getting string input will end the string with a \n character
+    // this is removing this \n character
+    str[strlen(str)-1] = '\0';
+    // terminating the process when the user types exit
+    if (strcmp(str, "exit") == 0) {
+        log_parent_process(0); // start_process = 0
+        exit(0);
+    }
+    char ** command_array = parse_command(str, &size);
+    // if the command was a change directory a child process will not be created
+    // because the execvp doesn't execute cd command
+    // using chdir() function instead
+    // subsequently no termination will be logged in the logs.txt file because no process
+    // was created to be logged
+    if (strcmp(command_array[0], "cd") == 0) {
+        if (chdir(command_array[1]) != 0) {
+            print_dir_error_msg(command_array[1]);
+        }
+    }
+    else {
+        execute_child_process(command_array, size);
     }
 }
 
 int main() {
     char str[BUFFER] = "";
-    int size = 0;
     getcwd(PATH_OF_LOGS_FILE, BUFFER);
     strcat(PATH_OF_LOGS_FILE, "/logs.txt");
     log_parent_process(1);
     while (1) {
         printf("Shell > ");
         fgets(str, BUFFER, stdin);
-        if (strcmp(str, "\n") == 0) 
-            continue;
-        str[strlen(str)-1] = '\0';
-        if (strcmp(str, "exit") == 0) {
-            log_parent_process(0);
-            exit(0);
-        }
-        char ** command_array = parse_command(str, &size);
-        if (strcmp(command_array[0], "cd") == 0) {
-            if (chdir(command_array[1]) != 0) {
-                print_dir_error_msg(command_array[1]);
-            }
-        }
-        else {
-            execute_child_process(command_array, size);
-        }
+        run_shell(str);
     }
     return 0;
 }
