@@ -18,6 +18,9 @@ void print_command_error_msg(char * erroneous_command) {
 void print_dir_error_msg(char * erroneous_dir) {
     printf("bash: cd: %s: No such file or directory\n", erroneous_dir);
 }
+void print_command_foramating_error_msg() {
+    printf("inconsistent double of single quotes....\n");
+}
 
 /**
  * Logs the creation or termination of the parent process by writing the process ID with system time next to it
@@ -100,6 +103,7 @@ char * remove_quotes_from_string(char * quoted_string, int size_of_quoted_string
  */
 char ** parse_command(char * command, int * size) {
     int n = 1;
+    char end_char = command[strlen(command) - 1];
     const char delimeter[2] = " ";
     // get the first token
     char * token = strtok(command, delimeter);
@@ -110,6 +114,7 @@ char ** parse_command(char * command, int * size) {
         // if true then directory or file name is between quotes
         if (token[0] == 39 || token[0] == 34) { // 39 ascii for single quote (') and 34 ascii for double quote (")
             int delimeter_ascii = token[0];
+            
             char* temp = (char *) malloc(sizeof(char) * BUFFER);
             strcpy(temp, token);
             if (token[strlen(token)-1] != delimeter_ascii) {
@@ -118,6 +123,10 @@ char ** parse_command(char * command, int * size) {
                     // add the space back to the string 
                     strcat(temp, " ");
                     token = strtok(NULL, delimeter);
+                    if (token == NULL) {
+                        print_command_foramating_error_msg();
+                        return NULL;
+                    }
                     // concatenate the other parts of the string that is between the quotes
                     strcat(temp, token);
                 } // at the end of the loop temp will contain the quotes and the space separated file name
@@ -209,6 +218,8 @@ void run_shell(char * str) {
         exit(0);
     }
     char ** command_array = parse_command(str, &size);
+    if (command_array == NULL)
+        return;
     // if the command was a change directory a child process will not be created
     // because the execvp doesn't execute cd command
     // using chdir() function instead
