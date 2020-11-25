@@ -199,7 +199,13 @@ void execute_child_process(char ** command_array, int size) {
         printf("ERROR\n");
     }
 }
-
+/**  
+ * if the command was a change directory a child process will not be created
+ * because the execvp doesn't execute cd command
+ * using chdir() function instead
+ * subsequently no termination will be logged in the logs.txt file because no process
+ * was created to be logged
+ **/
 void run_cd_command(char ** command_array) {
         if (command_array[1] == NULL) {
             chdir(getenv("HOME"));
@@ -229,11 +235,6 @@ void run_shell(char * str) {
     char ** command_array = parse_command(str, &size);
     if (command_array == NULL)
         return;
-    // if the command was a change directory a child process will not be created
-    // because the execvp doesn't execute cd command
-    // using chdir() function instead
-    // subsequently no termination will be logged in the logs.txt file because no process
-    // was created to be logged
     if (strcmp(command_array[0], "cd") == 0) {
         run_cd_command(command_array);
     }
