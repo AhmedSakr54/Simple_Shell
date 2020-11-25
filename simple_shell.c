@@ -200,6 +200,15 @@ void execute_child_process(char ** command_array, int size) {
     }
 }
 
+void run_cd_command(char ** command_array) {
+        if (command_array[1] == NULL) {
+            chdir(getenv("HOME"));
+        }
+        else if (chdir(command_array[1]) != 0) {
+            print_dir_error_msg(command_array[1]);
+        }
+}
+
 /**
  * pareses then runs what the user inputed into str
  * @param (char * str) : the user input from the terminal
@@ -226,12 +235,7 @@ void run_shell(char * str) {
     // subsequently no termination will be logged in the logs.txt file because no process
     // was created to be logged
     if (strcmp(command_array[0], "cd") == 0) {
-        if (command_array[1] == NULL) {
-            chdir(getenv("HOME"));
-        }
-        else if (chdir(command_array[1]) != 0) {
-            print_dir_error_msg(command_array[1]);
-        }
+        run_cd_command(command_array);
     }
     else {
         execute_child_process(command_array, size);
